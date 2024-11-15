@@ -345,7 +345,8 @@
                   added nil
                   mode (when no-keyword-opts :hyphens)
                   args (seq args)
-                  a->o a->o]
+                  a->o a->o
+                  arg-val? false]
              ;; (prn :acc acc :current-opt current-opt :added added :args args)
              (if-not args
                [acc current-opt added]
@@ -354,7 +355,7 @@
                  (if opt?
                    (recur (process-previous acc current-opt added nil)
                           raw-arg added mode (next args)
-                          a->o)
+                          a->o false)
                    (let [implicit-true? (true? raw-arg)
                          arg (str raw-arg)
                          collect-fn (coerce-collect-fn collect current-opt (get coerce-opts current-opt))
@@ -384,7 +385,7 @@
                                  k (or alias raw-k)]
                              (if arg-val
                                (recur (process-previous acc current-opt added collect-fn)
-                                      k nil mode (cons arg-val (rest args)) a->o)
+                                      k nil mode (cons arg-val (rest args)) a->o true)
                                (let [next-args (next args)
                                      next-arg (first next-args)
                                      m (parse-key next-arg mode current-opt coerce-opt added)
@@ -402,23 +403,27 @@
                                            next-args (concat args next-args)]
                                        (recur acc
                                               nil nil mode next-args
-                                              a->o))
+                                              a->o false))
                                      (let [k (if negative?
                                                (keyword (str/replace (str k) ":no-" ""))
                                                k)
                                            next-args (cons (not negative?) #_"true" next-args)]
                                        (recur (process-previous acc current-opt added collect-fn)
                                               k added mode next-args
-                                              a->o)))
+                                              a->o false)))
                                    (recur (process-previous acc current-opt added collect-fn)
                                           k added mode next-args
-                                          a->o)))))))
+                                          a->o false)))))))
                        (let [the-end? (or
                                        (and (= :boolean coerce-opt)
                                             (not= arg "true")
                                             (not= arg "false"))
                                        (and (= added current-opt)
-                                            (not collect-fn)))]
+                                            (not collect-fn))
+                                       (and (contains? (::dispatch-tree-ignored-args opts) arg)
+                                            (not arg-val?)
+                                            (= added current-opt)
+                                            (some? collect-fn)))]
                          (if the-end?
                            (let [{new-args :args
                                   a->o :args->opts}
@@ -429,7 +434,7 @@
                                    {:args args})
                                  new-args? (not= args new-args)]
                              (if new-args?
-                               (recur acc current-opt added mode new-args a->o)
+                               (recur acc current-opt added mode new-args a->o false)
                                [(vary-meta acc assoc-in [:org.babashka/cli :args] (vec args)) current-opt added]))
                            (let [opt (when-not (and (= :keywords mode)
                                                     fst-colon)
@@ -449,7 +454,7 @@
                                     opt
                                     mode
                                     (next args)
-                                    a->o)))))))))))
+                                    a->o false)))))))))))
          collect-fn (coerce-collect-fn collect last-opt (get coerce-opts last-opt))
          opts (-> (process-previous opts last-opt added collect-fn)
                   (cond->
